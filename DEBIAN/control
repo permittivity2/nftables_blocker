@@ -1,9 +1,9 @@
 Package: nftables-blocker
-Version: 0.1.1
+Version: 0.1.2
 Section: base
 Priority: optional
 Architecture: all
-Depends: perl, liblog-log4perl-perl, libconfig-file-perl, libdbi-perl, libdbd-sqlite3-perl, libthread-queue-any-perl, liblog-any-perl, libfile-flock-perl, libgetopt-argparse-perl
+Depends: perl, liblog-log4perl-perl, libconfig-file-perl, libdbi-perl, libdbd-sqlite3-perl, libthread-queue-any-perl, liblog-any-perl, libfile-flock-perl, libgetopt-argparse-perl, liblog-any-adapter-log4perl-perl, liblog-log4perl-perl
 Recommends: man-db
 Maintainer: Jeff Gardner <nftables_blocker20240811@forge.name>
 Description: A script to block IP addresses based on log file analysis using nftables.
