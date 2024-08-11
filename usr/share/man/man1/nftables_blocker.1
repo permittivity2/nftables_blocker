@@ -1,0 +1,36 @@
+.TH NFTABLES_BLOCKER.PL 1 "May 2024" "1.0.0" "nftables_blocker man page"
+
+.SH NAME
+nftables_blocker.pl \- A script to block IP addresses based on log file analysis using nftables.
+
+.SH SYNOPSIS
+.B nftables_blocker.pl
+[\fB--log4perl_conf\fR \fIlog4perl_conf_file\fR]
+[\fB--lockfile\fR \fIlockfile\fR]
+[\fB--config\fR \fIconfig_file\fR]
+[\fB--dbfile\fR \fIdb_file\fR]
+[\fB--interval\fR \fIscan_interval\fR]
+
+.SH DESCRIPTION
+This script reads log files, identifies IP addresses based on specified regex patterns, and blocks them using nftables. It supports multi-threading and signal handling for graceful shutdown.
+
+.SH OPTIONS
+.TP
+\fB--log4perl_conf\fR
+Location of the Log::Log4perl config file.
+.TP
+\fB--lockfile\fR
+Location of the lock file.
+.TP
+\fB--config\fR
+Location of the configuration file.
+.TP
+\fB--dbfile\fR
+Location of the SQLite database file.
+.TP
+\fB--interval\fR
+Scan interval in seconds (default: 10).
+
+.SH AUTHOR
+Jeff Gardner <ipblocker20240526@forge.name>
+

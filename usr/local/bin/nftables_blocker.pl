@@ -1,0 +1,202 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+nftables_blocker.pl - A script to block IP addresses based on log file analysis using nftables.
+
+=head1 SYNOPSIS
+
+    perl nftables_blocker.pl [--log4perl_conf <log4perl_conf_file>] [--lockfile <lockfile>] [--config <config_file>] [--dbfile <db_file>] [--interval <scan_interval>] [--chain <nftables_chain>] [--element <nftables_element>] [--stop]
+
+=head1 DESCRIPTION
+
+This script reads log files, identifies IP addresses based on specified regex patterns, and blocks them using nftables. It supports multi-threading and signal handling for graceful shutdown. It can also stop the running process by killing the PID read from the lockfile.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--log4perl_conf>
+
+Location of the Log::Log4perl config file (default: /etc/nftables_blocker/log4perl.conf).
+
+=item B<--lockfile>
+
+Location of the lock file (default: /run/nftables_blocker.lock).
+
+=item B<--config>
+
+Location of the configuration file (default: /etc/nftables_blocker/nftables_blocker.conf).
+
+=item B<--dbfile>
+
+Location of the SQLite database file (default: /var/lib/nftables_blocker/sqlite.db).
+
+=item B<--interval>
+
+Scan interval in seconds (default: 10).
+
+=item B<--chain>
+
+Nftables chain to use (default: "firewall").
+
+=item B<--element>
+
+Nftables element to use (default: "badipv4").
+
+=item B<--stop>
+
+Stop the running process (default: false).
+
+=back
+
+=head1 AUTHOR
+
+Jeff Gardner <ipblocker20240526@forge.name>
+
+=cut
+
+use strict;
+use warnings;
+use FindBin '$Bin';
+use lib "$Bin/../lib/site_perl/";
+use Getopt::ArgParse;
+use Log::Any::Adapter;  # Must be loaded before Log::Log4perl -- also, the NftablesBlocker module uses Log::Any.
+use Log::Log4perl qw(get_logger);
+use NftablesBlocker;
+# use File::Flock;
+use Carp;
+use File::Basename;
+use Data::Dumper;
+use NftablesBlocker::Flocker; 
+
+Log::Any::Adapter->set('Log4perl');
+
+$Data::Dumper::Indent = 1;
+$Data::Dumper::Sort = 1;
+
+my $logger = get_logger();
+my $fakeroot = "$Bin/../../..";
+
+# Main subroutine
+sub main {
+    my $args = setup_args();
+
+    $logger = setup_logger($args);
+    $logger->info("Starting nftables_blocker...");
+
+    if ($args->stop) {
+        stop_process($args->lockfile) or $logger->info("Failed to stop the running process.  See log for details.");
+        exit 0;
+    }
+
+    # Handle lockfile using File::Flock
+    $logger->info("Attempting to lock " . $args->lockfile . " ...");
+    my $lock = NftablesBlocker::Flocker->new(lock_file => $args->lockfile);
+    if (!$lock->{lock}) {
+        $logger->logdie("Cannot lock $args->lockfile: $!");
+    }
+    $logger->info("Locked " . $args->lockfile . " successfully.");
+
+    $logger->info("Instantiating NftablesBlocker object...");
+    my $blocker = NftablesBlocker->new(
+        config_file   => $args->config,
+        lock_file     => $args->lockfile,
+        scan_interval => $args->interval,
+        db_file       => $args->dbfile,
+        chain         => $args->chain,
+        element       => $args->element,
+    );
+
+    $logger->info("Running NftablesBlocker object...");
+    $blocker->run();
+
+    # Lock will be released when $lock goes out of scope
+}
+
+sub setup_args {
+    my $ap = Getopt::ArgParse->new_parser(
+        prog        => 'nftables_blocker',
+        description => 'A script to block IP addresses based on log file analysis',
+    );
+
+    $ap->add_arg('--log4perl_conf', default => "$fakeroot/etc/nftables_blocker/log4perl.conf",          help => 'Location of the Log::Log4perl config file');
+    $ap->add_arg('--lockfile',      default => "$fakeroot/run/nftables_blocker.lock",                   help => 'Location of the lock file');
+    $ap->add_arg('--interval',      default => 10,                                                      help => 'Scan interval in seconds');
+    $ap->add_arg('--config',        default => "$fakeroot/etc/nftables_blocker/nftables_blocker.conf",  help => 'Location of the configuration file');
+    $ap->add_arg('--dbfile',        default => "$fakeroot/var/lib/nftables_blocker/sqlite.db",          help => 'Location of the SQLite database file');
+    $ap->add_arg('--chain',         default => 'firewall',                                              help => 'Nftables chain to use');
+    $ap->add_arg('--element',       default => 'badipv4',                                               help => 'Nftables element to use');
+    $ap->add_arg('--stop',          default => 0, type => 'Bool',                                       help => 'Stop the running process based on the lockfile PID');
+
+    return $ap->parse_args();
+}
+
+sub setup_logger {
+    my ($clargs) = @_;
+
+    # Check if log4perl configuration is specified
+    if ($clargs->log4perl_conf && -r $clargs->log4perl_conf) {
+        Log::Log4perl->init($clargs->log4perl_conf) or croak "Unable to initialize Log4perl with configuration file: $clargs->log4perl_conf";
+        print "Log4perl configuration file: " . $clargs->log4perl_conf . "\n";
+    } else {
+        # Setup default logging configuration if no log4perl configuration is specified
+        my $default_conf = qq(
+            log4perl.rootLogger=DEBUG, Screen
+            log4perl.appender.Screen=Log::Log4perl::Appender::Screen
+            log4perl.appender.Screen.layout=Log::Log4perl::Layout::PatternLayout
+            log4perl.appender.Screen.layout.ConversionPattern=%d|%p|%l|%X{TID}|%m{chomp}%n
+        );
+        Log::Log4perl::init(\$default_conf) or croak "Unable to initialize Log4perl with default configuration";
+        print "Log4perl default configuration being used\n";
+    }
+
+    # Attempt to get the logger
+    # $logger is a global variable.  Why return $logger when it is already global ... I don't know.
+    $logger = get_logger() || croak "Unable to get logger";
+    $logger->info("Logger initialized");
+    return $logger;
+}
+
+sub stop_process {
+    my ($lockfile) = @_;
+
+    if (!-e $lockfile) {
+        print "Lockfile does not exist: $lockfile\n";
+        return;
+    }
+
+    open my $fh, '<', $lockfile or croak "Cannot open lockfile: $!";
+    my $pid = <$fh>;
+    close $fh;
+
+    chomp $pid;
+
+    # Get the basename of the currently running script
+    my $script_name = basename($0);
+
+    # Check if the process is running
+    if (!kill 0, $pid) {
+        $logger->info("No process with PID $pid is running.  You will need to manually search for the process and kill it");
+        $logger->info("To find the process name, run something like the following: ps aux | grep $script_name");
+        $logger->info("After killing the process, manually remove the lockfile: $lockfile");
+        return 0;
+    }
+
+    # Verify the process name
+    my $cmdline = `cat /proc/$pid/cmdline`;
+    if ($cmdline =~ /\Q$script_name\E/) {
+        $logger->info("Stopping process $pid...\n");
+        kill 'SIGKILL', $pid or $logger->info("Failed to kill process $pid: $!") and return 0;
+        $logger->info("Process $pid stopped.\n");
+        unlink $lockfile or $logger->info("Could not remove lockfile: $!") and return 0;
+        return 1;
+    } else {
+        $logger->info("Process $pid does not match expected name.\n");
+    }
+    
+    return 0;
+}
+
+# Call main subroutine
+main();
