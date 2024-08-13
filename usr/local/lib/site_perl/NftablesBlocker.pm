@@ -5,7 +5,7 @@ package NftablesBlocker;
 #   use Log::Log4perl qw(get_logger);
 #   Log::Any::Adapter->set('Log4perl');
 # Thread IDs are set as part of a MDC usinig Log4perl.  Having the thread id will be a great help in debugging.
-# I encourage the following log4perl layout: 
+# I encourage the following log4perl layout:
 #   log4perl.appender.LOG1.layout                        = Log::Log4perl::Layout::PatternLayout
 #   log4perl.appender.LOG1.layout.ConversionPattern      = %d|%p|%l|%X{PID}|%X{TID}|%m{chomp}%n
 
@@ -27,7 +27,7 @@ use Data::Dumper;
 use JSON qw(decode_json encode_json);
 
 $Data::Dumper::Indent = 1;
-$Data::Dumper::Sort = 1;
+$Data::Dumper::Sortkeys = 1;
 
 my $exit_flag :shared = 0;
 
@@ -167,25 +167,25 @@ sub _setup_database {
     return 1;
 }
 
-# This is incomplete, untested, etc ---- 
+# This is incomplete, untested, etc ----
 sub _report {
     my $self = shift;
     my $dbh = _get_DBH($self->{db_file});
     my $qry = qq/
-        SELECT 
+        SELECT
             b.id AS bad_ip_id,
             i.ip,
             datetime(t.timestamp, 'unixepoch') AS formatted_timestamp,
             lf.log_file
-        FROM 
+        FROM
             bad_ips b
-        JOIN 
+        JOIN
             ips i ON b.ip_id = i.id
-        JOIN 
+        JOIN
             timestamps t ON b.timestamp_id = t.id
-        JOIN 
+        JOIN
             log_files lf ON b.log_file_id = lf.id
-        ORDER BY 
+        ORDER BY
             t.timestamp DESC;
     /;
     my $sth = $dbh->prepare($qry);
@@ -199,7 +199,7 @@ sub _report {
 # sub _setup_database {
 #     my $self = shift;
 #     my $db_file = $self->{db_file};
-#     $log->info("Setting up database (for now, only SQLite is supported): $db_file"); 
+#     $log->info("Setting up database (for now, only SQLite is supported): $db_file");
 #     my $dsn = "dbi:SQLite:dbname=$db_file";
 #     my $dbh = _get_DBH($dsn);
 
@@ -253,7 +253,7 @@ sub run {
 
     # Start the log file processing threads
     my @threads;
-    
+
     $log->debug("Dump of self: " . Dumper($self));
 
     foreach my $log_to_review (sort keys %{$self->{configs}->{logfile}}) {
@@ -314,7 +314,7 @@ sub block_ips {
 
 
 #  I actually put this sub for checking if the IP is already in nftables into the DefaultExtractor module
-#   it's not functionally needed here.  I am not for sure a good reason to actually have this but leaving it 
+#   it's not functionally needed here.  I am not for sure a good reason to actually have this but leaving it
 #   in but commented but always return 0.
 #   There is no harm in trying to add an IP to an element set that already has the IP in it.
 sub _ip_in_nftables {
@@ -330,10 +330,10 @@ sub _ip_in_nftables {
     my $json_output = `$cmd`;
     my $nft_data = decode_json($json_output);
     my $nftables = $nft_data->{nftables};
-    foreach my $nftable (@$nftables) { 
-        if ( $nftable->{set}->{name} and 
-                $nftable->{set}->{table} and 
-                $nftable->{set}->{name} eq $element and 
+    foreach my $nftable (@$nftables) {
+        if ( $nftable->{set}->{name} and
+                $nftable->{set}->{table} and
+                $nftable->{set}->{name} eq $element and
                 $nftable->{set}->{table} eq $table ) {
             my $elements = $nftable->{set}->{elem};
             foreach my $elem (@$elements) {
@@ -561,12 +561,12 @@ sub _create_nftables_chain {
     $log->info("Running command to create nft $table: $cmd");
     system($cmd) == 0 and $log->info("Created nftables table $table")
         or $log->error("Could not create nftables table $chain.  Full command: $cmd");
-    
+
     $cmd = "nft add chain $family $table $chain { type filter hook input priority 0 \\; }";
     $log->info("Running command to create nft chain: $cmd");
     system($cmd) == 0 and $log->info("Created nftables chain $chain")
         or $log->error("Could not create nftables chain $chain.  Full command: $cmd");
-    
+
     # $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout 15m \\; }";
     $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout $timeout \\; }";
     $log->info("Running command to create nft timeout element: $cmd");
@@ -614,13 +614,15 @@ sub process_log_file {
 
     while ( 1 ) {
         my $bad_ips = $review_log_module->run();
-        $log->debug("Bad IPs: " . Dumper($bad_ips));
 
         last if $exit_flag;  # Early exit flag check.  No need to add IPs to the queue if we are exiting.
+
+        my $logmsg = $bad_ips ? join(", ", @$bad_ips) : "none";
+        $log->debug("Bad IPs: " . $logmsg);
         $args->{bad_ips} = $bad_ips;
         # $log->info("Args to add bad IPs to queue: " . Dumper($args));
         _add_bad_ips_to_queue($args) or $log->error("Could not add bad IPs to queue");
-        
+
         for (my $i = 0; $i < $scan_interval; $i++) {
             $log->info("Gracefully exitting the thread for $args->{logfile}") && last if $exit_flag;
             sleep 1;
@@ -657,9 +659,9 @@ sub _add_bad_ips_to_queue {   # This is a "private" method and has no access to 
     # $log->info("TESTING TESTING TESTING Removing all but 2 entries from the queue");
     # splice @q_args, 2;
 
-    $log->info("No bad IPs to queue") and return 1 if (!@q_args);
+    $log->debug("No bad IPs to queue") and return 1 if (!@q_args);
 
-    $log->info("Adding IPs to queue: " . Dumper(\@q_args));
+    $log->debug("Adding IPs to queue: " . Dumper(\@q_args));
     # $ip_block_queue->enqueue(@q_args) and return 1;
     my $error = 0;
 
@@ -681,6 +683,6 @@ sub _add_bad_ips_to_queue {   # This is a "private" method and has no access to 
 sub DESTROY {
     my $self = shift;
     $log->info("Destroying NftablesBlocker object...");
-}   
+}
 
 1;
