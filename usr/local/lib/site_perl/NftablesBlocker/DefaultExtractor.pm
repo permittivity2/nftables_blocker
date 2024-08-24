@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Fcntl qw(SEEK_END SEEK_SET);
 use Log::Any qw($log);
+use Log::Log4perl::MDC;
 use Data::Dumper;
 use JSON qw(decode_json);
 
@@ -42,7 +43,7 @@ sub new {
 
 sub run {
     my $self = shift;
-    $log->info("Running run in " . __PACKAGE__ . " ...");
+    $log->debug("Running run in " . __PACKAGE__ . " ...");
 
     my $bad_ips = $self->extract_bad_ips( $self->{args} );
 
@@ -110,7 +111,7 @@ sub _read_files {
 
 sub extract_bad_ips {
     my ($self, $args) = @_;
-    $log->info("Running extract_bad_ips in " . __PACKAGE__ . " ...");
+    # $log->info("Running extract_bad_ips in " . __PACKAGE__ . " ...");
 
     my $files = $args->{files} || {};
     my $regexes = $args->{regexes} || {};

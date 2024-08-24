@@ -63,7 +63,8 @@ use lib "$Bin/../lib/site_perl/";
 use Getopt::ArgParse;
 use Log::Any::Adapter;  # Must be loaded before Log::Log4perl -- also, the NftablesBlocker module uses Log::Any.
 use Log::Log4perl qw(get_logger);
-use NftablesBlocker;use Carp;
+use NftablesBlocker;
+use Carp;
 use File::Basename;
 use Data::Dumper;
 use NftablesBlocker::Flocker;  #Home grown module to handle file locking because File::Flock is not working as expected!
@@ -143,7 +144,7 @@ sub setup_logger {
             log4perl.rootLogger=DEBUG, Screen
             log4perl.appender.Screen=Log::Log4perl::Appender::Screen
             log4perl.appender.Screen.layout=Log::Log4perl::Layout::PatternLayout
-            log4perl.appender.Screen.layout.ConversionPattern=%d|%p|%l|%X{TID}|%m{chomp}%n
+            log4perl.appender.Screen.layout.ConversionPattern=%d|%p|%l|%X{TID}|%X{logfile}|%m{chomp}%n
         );
         Log::Log4perl::init(\$default_conf) or croak "Unable to initialize Log4perl with default configuration";
         print "This message intentionally sent to STDOUT -- Log4perl default configuration being used\n";

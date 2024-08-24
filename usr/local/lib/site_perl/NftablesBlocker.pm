@@ -503,6 +503,7 @@ sub _get_DBH {
 sub process_log_file {
     my $args = shift;
     Log::Log4perl::MDC->put("TID", "TID:" . threads->tid());
+    Log::Log4perl::MDC->put("LCN", 'log config name:' . $args->{logfile});
     $log->debug("Dump of args: " . Dumper($args));
 
     my $module = $args->{module} || "DefaultExtractor";
@@ -513,9 +514,15 @@ sub process_log_file {
     my $scan_interval = int($args->{scan_interval} // 10);
 
     my $review_log_module = $module->new($args);
+    my $cycle_count = 0;
 
     while ( 1 ) {
+        $cycle_count++;
+        my $start_time = time;
         my $bad_ips = $review_log_module->run();
+        my $end_time = time;
+        $log->debug("Time to process log file: " . ($end_time - $start_time) . " seconds");
+        $log->info("Completed cycle $cycle_count");
 
         last if $exit_flag;  # Early exit flag check.  No need to add IPs to the queue if we are exiting.
 
