@@ -1,0 +1,13 @@
+/var/log/nftables_blocker/nftables_blocker.log {
+    daily                    # Rotate logs daily; change to weekly or monthly if needed
+    rotate 7                 # Keep 7 rotated log files before deleting old ones
+    missingok                # If the log file is missing, go on to the next one without issuing an error
+    notifempty               # Do not rotate the log if it is empty
+    compress                 # Compress rotated logs to save space
+    delaycompress            # Delay compression of the rotated log until the next rotation
+    copytruncate             # Truncate the original log file after creating a copy
+    create 0640 root adm     # Create new log files with specified permissions and ownership
+    postrotate
+        systemctl reload nftables_blocker.service > /dev/null 2>&1 || true
+    endscript
+}

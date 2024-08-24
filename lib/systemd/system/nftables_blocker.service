@@ -1,0 +1,13 @@
+[Unit]
+Description=nftables Blocker Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/nftables_blocker.pl
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -TERM $MAINPID && /usr/local/bin/nftables_blocker.pl
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

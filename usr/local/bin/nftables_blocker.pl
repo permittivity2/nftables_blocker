@@ -63,17 +63,15 @@ use lib "$Bin/../lib/site_perl/";
 use Getopt::ArgParse;
 use Log::Any::Adapter;  # Must be loaded before Log::Log4perl -- also, the NftablesBlocker module uses Log::Any.
 use Log::Log4perl qw(get_logger);
-use NftablesBlocker;
-# use File::Flock;
-use Carp;
+use NftablesBlocker;use Carp;
 use File::Basename;
 use Data::Dumper;
-use NftablesBlocker::Flocker; 
+use NftablesBlocker::Flocker;  #Home grown module to handle file locking because File::Flock is not working as expected!
 
 Log::Any::Adapter->set('Log4perl');
 
-$Data::Dumper::Indent = 1;
-$Data::Dumper::Sort = 1;
+$Data::Dumper::Indent   = 1;
+$Data::Dumper::Sortkeys = 1;
 
 my $logger = get_logger();
 my $fakeroot = "$Bin/../../..";

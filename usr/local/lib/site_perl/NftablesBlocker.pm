@@ -45,7 +45,6 @@ sub new {
         lock_file      => $args{lock_file},
         scan_interval  => $args{scan_interval} // 10,
         db_file        => $args{db_file} || $log->error("db_file parameter is required") && croak("db_file parameter is required"),
-        # ip_block_queue => Thread::Queue->new(),
         chain          => $args{chain} // 'firewall',
         element        => $args{element} // 'badipv4',
         table          => $args{table} // 'nftblocker',
@@ -196,29 +195,6 @@ sub _report {
     $dbh->disconnect;
 }
 
-# sub _setup_database {
-#     my $self = shift;
-#     my $db_file = $self->{db_file};
-#     $log->info("Setting up database (for now, only SQLite is supported): $db_file");
-#     my $dsn = "dbi:SQLite:dbname=$db_file";
-#     my $dbh = _get_DBH($dsn);
-
-#     unless ($dbh) {
-#         $log->error("Could not connect to database: $DBI::errstr");
-#         return 0;
-#     }
-
-#     $dbh->do("CREATE TABLE IF NOT EXISTS log_position (log_file TEXT PRIMARY KEY, position INTEGER)") or return 0;
-#     $dbh->do("CREATE TABLE IF NOT EXISTS bad_ips (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, logfile TEXT, jaildt DATETIME DEFAULT CURRENT_TIMESTAMP)") or return 0;
-
-#     # Do a simple insert and then delete to verify we can write to the database
-#     $dbh->do("INSERT INTO log_position (log_file, position) VALUES ('test.log', 0)") or return 0;
-#     $dbh->do("DELETE FROM log_position WHERE log_file = 'test.log'") or return 0;
-
-#     $log->info("Database setup complete.");
-#     $dbh->disconnect or return 0;
-#     return 1;
-# }
 
 sub run {
     my $self = shift;
@@ -399,27 +375,6 @@ sub _get_or_insert_id {
 }
 
 
-# sub _add_bad_ip_to_db {
-#     # my ($dbh, $ip, $logfile) = @_;
-#     my $args = shift;
-#     my $dbh = $args->{dbh};
-#     my $ip = $args->{ip};
-#     my $logfile = $args->{logfile};
-#     my $error = 0;
-
-#     # Do a full database validation before trying to insert
-#     my $qry = "SELECT 1 FROM bad_ips WHERE ip = ? AND logfile = ?";
-#     my $sth = $dbh->prepare($qry);
-#     $sth->execute($ip, $logfile) or $error = 1;
-#     if ( $error ) {
-#         $log->error("Could not validate database.  SOme informatioin lost.  This will not cause a failure but should be investigated.");
-#         return 0;
-#     }
-
-#     my $qry = "INSERT INTO bad_ips (ip, logfile) VALUES (?, ?)";
-#     $dbh->do($qry, undef, $ip, $logfile) or $log->error("Could not add IP $ip to database");
-# }
-
 sub _check_nftables_setup {
     my $self = shift;
     my $chain = $self->{chain};
@@ -463,70 +418,6 @@ sub _check_nftables_setup {
     return 1;
 }
 
-
-
-# sub _check_nftables_setup {
-#     my $self = shift;
-#     my $chain = $self->{chain};
-#     my $element = $self->{element};
-#     my $table = $self->{table};
-#     my $family = $self->{family};
-
-#     my $cmd = "nft list table $family $table";
-#     $log->info("Running command to check if nft table exists: $cmd");
-#     my $output = `$cmd`;
-#     if ($output =~ /table\s$family\s$table\s\{/) {
-#         $log->debug("nftables table $table exists with chain $chain");
-#     }
-#     else {
-#         $log->debug("nftables table $table does not exist with chain $chain");
-#         return 0;
-#     }
-
-#     # check if element exists
-#     $cmd = "nft list set $family $table $element";
-#     $log->info("Running command to check if nft element exists: $cmd");
-#     $output = `$cmd`;
-#     if ($output =~ /set\s$element\s\{/) {
-#         $log->debug("nftables element $element exists");
-#     }
-#     else {
-#         $log->debug("nftables element $element does not exist");
-#         return 0;
-#     }
-
-#     # Check if source and destination address rule exists
-#     $cmd = "nft list chain $family $table $chain";
-#     $log->info("Running command to check if nft rule exists: $cmd");
-#     $output = `$cmd`;
-#     if ( $output =~ /$family.*$table.*\s.*chain $chain.*\s.*\s.*ip saddr.*${element}*/ ) {
-#         $log->debug("nftables rule exists to drop and count packets for source addresses in $element");
-#     }
-#     else {
-#         $log->debug("nftables rule does not exist to drop and count packets for source addresses in $element");
-#         return 0;
-#     }
-
-#     # # Check if destination address rule exists
-#     # $cmd = "nft list chain $family $table $chain";
-#     # $log->info("Running command to check if nft rule exists: $cmd");
-#     # $output = `$cmd`;
-#     if ( $output =~ /$family.*$table.*\s.*chain $chain.*\s.*\s.*\s.*ip daddr.*${element}*/ ) {
-#         $log->debug("nftables rule exists to drop and count packets for destination addresses in $element");
-#     }
-#     else {
-#         $log->debug("nftables rule does not exist to drop and count packets for destination addresses in $element");
-#         return 0;
-#     }
-
-#     # Get nftables ruleset to print for logging
-#     $cmd = "nft -a list ruleset";
-#     $output = `$cmd`;
-
-#     $log->debug("nftables setup appears to be complete. Here is the ruleset: \n$output");
-#     return 1;
-
-# }
 
 sub _delete_nftables_chain {
     my $self = shift;
