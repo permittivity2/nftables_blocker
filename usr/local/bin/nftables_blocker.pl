@@ -136,7 +136,7 @@ sub setup_logger {
     # Check if log4perl configuration is specified
     if ($clargs->log4perl_conf && -r $clargs->log4perl_conf) {
         Log::Log4perl->init($clargs->log4perl_conf) or croak "Unable to initialize Log4perl with configuration file: $clargs->log4perl_conf";
-        print "Log4perl configuration file: " . $clargs->log4perl_conf . "\n";
+        print "This message intentionally sent to STDOUT -- Log4perl configuration file: " . $clargs->log4perl_conf . "\n";
     } else {
         # Setup default logging configuration if no log4perl configuration is specified
         my $default_conf = qq(
@@ -146,7 +146,7 @@ sub setup_logger {
             log4perl.appender.Screen.layout.ConversionPattern=%d|%p|%l|%X{TID}|%m{chomp}%n
         );
         Log::Log4perl::init(\$default_conf) or croak "Unable to initialize Log4perl with default configuration";
-        print "Log4perl default configuration being used\n";
+        print "This message intentionally sent to STDOUT -- Log4perl default configuration being used\n";
     }
 
     # Attempt to get the logger

@@ -154,7 +154,12 @@ sub _setup_database {
             FOREIGN KEY (log_file_id) REFERENCES log_files(id)
         )");
 
-        $dbh->commit;
+        # Check if autocommit is on
+        unless ($dbh->{AutoCommit}) {
+            $log->info("Turning on AutoCommit");
+            $dbh->{AutoCommit} = 1;
+        }
+        # $dbh->commit;
     };
     if ($@) {
         $log->error("Failed to set up database: $@");
@@ -392,7 +397,13 @@ sub _check_nftables_setup {
 
     # Check if the required table exists
     my $tables = $nftables_data->{nftables};
-    my $table_exists = grep { $_->{table}->{name} eq $table && $_->{table}->{family} eq $family } @$tables;
+    my $table_exists = grep { 
+            exists $_->{table} &&
+            exists $_->{table}->{name} &&
+            exists $_->{table}->{family} &&
+            $_->{table}->{name} eq $table && 
+            $_->{table}->{family} eq $family 
+        } @$tables;
     unless ($table_exists) {
         $log->debug("nftables table $table does not exist");
         return 0;
@@ -574,6 +585,7 @@ sub _add_bad_ips_to_queue {   # This is a "private" method and has no access to 
 sub DESTROY {
     my $self = shift;
     $log->info("Destroying NftablesBlocker object...");
+    print "This message intentionally sent to STDOUT -- Destroying NftablesBlocker object...\n";
 }
 
 1;
