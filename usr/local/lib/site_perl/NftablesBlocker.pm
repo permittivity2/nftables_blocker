@@ -59,13 +59,8 @@ sub new {
     # Check if nftables is installed
     $self->_check_nftables() or croak("nftables is not installed");
 
-    if ( ! $self->_check_nftables_setup() ) {
-        $self->_delete_nftables_chain() or croak("Could not delete nftables chain");
-        $self->_create_nftables_chain() or croak("Could not create nftables chain");
-    }
-    else {
-        $log->info("No change to nft.  nftables rules appear to be setup and ready.");
-    }
+    # Blindly create the chains, rules, etc.  If they already exist, it will not hurt anything.
+    $self->_create_nftables_chain() or croak("Could not create nftables chain");
 
     # Load regex patterns and modules from the configuration file
     $self->_load_config() or croak("Could not load configuration file");
@@ -379,57 +374,6 @@ sub _get_or_insert_id {
     return $id;
 }
 
-
-sub _check_nftables_setup {
-    my $self = shift;
-    my $chain = $self->{chain};
-    my $element = $self->{element};
-    my $table = $self->{table};
-    my $family = $self->{family};
-
-    # Run the command to get the entire ruleset in JSON format
-    my $cmd = "nft -a -j list ruleset";
-    $log->info("Running command to get the complete nftables ruleset in JSON: $cmd");
-    my $output = `$cmd`;
-
-    # Decode the JSON output
-    my $nftables_data = decode_json($output);
-
-    # Check if the required table exists
-    my $tables = $nftables_data->{nftables};
-    my $table_exists = grep { 
-            exists $_->{table} &&
-            exists $_->{table}->{name} &&
-            exists $_->{table}->{family} &&
-            $_->{table}->{name} eq $table && 
-            $_->{table}->{family} eq $family 
-        } @$tables;
-    unless ($table_exists) {
-        $log->debug("nftables table $table does not exist");
-        return 0;
-    }
-
-    # Check if the required chain exists
-    my $chains = [ grep { exists $_->{chain} } @$tables ];
-    my $chain_exists = grep { $_->{chain}->{name} eq $chain && $_->{chain}->{table} eq $table } @$chains;
-    unless ($chain_exists) {
-        $log->debug("nftables chain $chain does not exist");
-        return 0;
-    }
-
-    # Check if the required set (element) exists
-    my $sets = [ grep { exists $_->{set} } @$tables ];
-    my $set_exists = grep { $_->{set}->{name} eq $element && $_->{set}->{table} eq $table } @$sets;
-    unless ($set_exists) {
-        $log->debug("nftables set $element does not exist");
-        return 0;
-    }
-
-    $log->debug("nftables setup appears to be complete. Here is the ruleset: \n$output");
-    return 1;
-}
-
-
 sub _delete_nftables_chain {
     my $self = shift;
     my $chain = $self->{chain};
@@ -447,7 +391,6 @@ sub _delete_nftables_chain {
     $log->info("Running command to delete nft table: $cmd");
     system($cmd) == 0 and $log->info("Deleted nftables table $table")
         or $log->error("Could not delete nftables table $table.  Full command: $cmd");
-
     return 1;
 }
 
@@ -467,24 +410,26 @@ sub _create_nftables_chain {
     $cmd = "nft add chain $family $table $chain { type filter hook input priority 0 \\; }";
     $log->info("Running command to create nft chain: $cmd");
     system($cmd) == 0 and $log->info("Created nftables chain $chain")
-        or $log->error("Could not create nftables chain $chain.  Full command: $cmd");
+        or $log->error("Could not create nftables chain $chain.  Full command: $cmd")
+        and return 0;
 
-    # $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout 15m \\; }";
     $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout $timeout \\; }";
     $log->info("Running command to create nft timeout element: $cmd");
     system($cmd) == 0 and $log->info("Created nftables set $element")
-        or $log->error("Could not create nftables set $element.  Full command: $cmd");
+        or $log->error("Could not create nftables set $element.  Full command: $cmd")
+        and return 0;
 
     $cmd = "nft add rule $family $table $chain ip saddr \@badipv4 counter drop";
     $log->info("Running command: $cmd");
     system($cmd) == 0 and $log->info("Set nft to drop and count packets for source addresses in $element")
-        or $log->error("Could not set nft to drop and count packets for source addresses in $element.  Full command: $cmd");
-
+        or $log->error("Could not set nft to drop and count packets for source addresses in $element.  Full command: $cmd")
+        and return 0;
 
     $cmd = "nft add rule inet $table $chain ip daddr \@badipv4 counter drop";
     $log->info("Running command: $cmd");
     system($cmd) == 0 and $log->info("Set nft to drop and count packets for destination addresses in $element")
-        or $log->error("Could not set nft to drop and count packets for destination addresses in $element.  Full command: $cmd");
+        or $log->error("Could not set nft to drop and count packets for destination addresses in $element.  Full command: $cmd") 
+        and return 0;
 
     return 1;
 }
