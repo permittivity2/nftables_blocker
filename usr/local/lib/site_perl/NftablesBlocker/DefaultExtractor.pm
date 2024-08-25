@@ -83,6 +83,7 @@ sub _read_files {
 
     foreach my $file (sort keys %$files) {
         my $seek_pos = $self->{$logfile}->{$file}->{seek_pos} || 0;
+        $log->debug("Seek positiion for $logfile -> $file: $seek_pos");
         my $filename = $files->{$file};
 
         my $fh;
@@ -101,7 +102,10 @@ sub _read_files {
             push @file_contents, $line;
         }
 
+        $log->debug("Read " . scalar @file_contents . " lines from $logfile -> $file -> $filename.");
+        $log->trace("File contents: " . Dumper(\@file_contents));
         $self->{$logfile}->{$file}->{seek_pos} = $args->{read_all} ? 0 : tell($fh);
+        $log->debug("New seek position for $logfile -> $file: " . $self->{$logfile}->{$file}->{seek_pos});
         close $fh;
     }
 

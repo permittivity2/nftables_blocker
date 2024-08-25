@@ -114,7 +114,7 @@ sub main {
 }
 
 sub setup_args {
-    my $ap = Getopt::ArgParse->new_parser(
+   my $ap = Getopt::ArgParse->new_parser(
         prog        => 'nftables_blocker',
         description => 'A script to block IP addresses based on log file analysis',
     );
