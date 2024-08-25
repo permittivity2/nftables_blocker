@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# Reload systemd to recognize new service file
+systemctl daemon-reload
+
+# Enable and start the nftables_blocker service
+systemctl enable nftables_blocker.service
+systemctl start nftables_blocker.service

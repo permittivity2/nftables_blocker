@@ -419,7 +419,289 @@ sub _create_nftables_chain {
         or $log->error("Could not create nftables set $element.  Full command: $cmd")
         and return 0;
 
-    $cmd = "nft add rule $family $table $chain ip saddr \@badipv4 counter drop";
+    # Get nft as json and decode it to get the set name
+    my $json_output = `nft -j list set inet $table $element`;
+    my $nft_data = decode_json($json_output);
+    my $nftables = $nft_data->{nftables};
+    # The json for nftables is an array that looks like this:
+    #    "nftables" : [
+    #       {
+    #          "metainfo" : {
+    #             "json_schema_version" : 1,
+    #             "release_name" : "Lester Gooch",
+    #             "version" : "1.0.2"
+    #          }
+    #       },
+    #       {
+    #          "table" : {
+    #             "family" : "inet",
+    #             "handle" : 17,
+    #             "name" : "filter"
+    #          }
+    #       },
+    #       {
+    #          "chain" : {
+    #             "family" : "inet",
+    #             "handle" : 1,
+    #             "hook" : "input",
+    #             "name" : "input",
+    #             "policy" : "accept",
+    #             "prio" : 0,
+    #             "table" : "filter",
+    #             "type" : "filter"
+    #          }
+    #       },
+    #       {
+    #          "chain" : {
+    #             "family" : "inet",
+    #             "handle" : 2,
+    #             "hook" : "forward",
+    #             "name" : "forward",
+    #             "policy" : "accept",
+    #             "prio" : 0,
+    #             "table" : "filter",
+    #             "type" : "filter"
+    #          }
+    #       },
+    #       {
+    #          "chain" : {
+    #             "family" : "inet",
+    #             "handle" : 3,
+    #             "hook" : "output",
+    #             "name" : "output",
+    #             "policy" : "accept",
+    #             "prio" : 0,
+    #             "table" : "filter",
+    #             "type" : "filter"
+    #          }
+    #       },
+    #       {
+    #          "table" : {
+    #             "family" : "inet",
+    #             "handle" : 18,
+    #             "name" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "set" : {
+    #             "family" : "inet",
+    #             "flags" : [
+    #                "timeout"
+    #             ],
+    #             "handle" : 2,
+    #             "name" : "badipv4",
+    #             "table" : "nftblocker",
+    #             "timeout" : 900,
+    #             "type" : "ipv4_addr"
+    #          }
+    #       },
+    #       {
+    #          "chain" : {
+    #             "family" : "inet",
+    #             "handle" : 1,
+    #             "hook" : "input",
+    #             "name" : "firewall",
+    #             "policy" : "accept",
+    #             "prio" : 0,
+    #             "table" : "nftblocker",
+    #             "type" : "filter"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "saddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 536,
+    #                      "packets" : 11
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 3,
+    #             "table" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "daddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 0,
+    #                      "packets" : 0
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 4,
+    #             "table" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "saddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 0,
+    #                      "packets" : 0
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 5,
+    #             "table" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "daddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 0,
+    #                      "packets" : 0
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 6,
+    #             "table" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "saddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 0,
+    #                      "packets" : 0
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 7,
+    #             "table" : "nftblocker"
+    #          }
+    #       },
+    #       {
+    #          "rule" : {
+    #             "chain" : "firewall",
+    #             "expr" : [
+    #                {
+    #                   "match" : {
+    #                      "left" : {
+    #                         "payload" : {
+    #                            "field" : "daddr",
+    #                            "protocol" : "ip"
+    #                         }
+    #                      },
+    #                      "op" : "==",
+    #                      "right" : "@badipv4"
+    #                   }
+    #                },
+    #                {
+    #                   "counter" : {
+    #                      "bytes" : 0,
+    #                      "packets" : 0
+    #                   }
+    #                },
+    #                {
+    #                   "drop" : null
+    #                }
+    #             ],
+    #             "family" : "inet",
+    #             "handle" : 8,
+    #             "table" : "nftblocker"
+    #          }
+    #       }
+    #    ]
+    # We now push all the rule expressions for chains $chain and table $table onto a @expressions array
+    my @expressions = grep { $_->{rule} and $_->{rule}->{chain} eq $chain and $_->{rule}->{table} eq $table } @$nftables;
+    # Now verify the saddr rule exists
+    my $saddr_rule = grep { $_->{match} and $_->{match}->{left}->{payload}->{field} eq 'saddr' and $_->{match}->{right} eq "\@$element" } @{$expressions[0]->{rule}->{expr}};
+
+
+    # Add rule to block source address for $element 
+    $cmd = "nft add rule $family $table $chain ip saddr \@$element counter drop";
     $log->info("Running command: $cmd");
     system($cmd) == 0 and $log->info("Set nft to drop and count packets for source addresses in $element")
         or $log->error("Could not set nft to drop and count packets for source addresses in $element.  Full command: $cmd")
