@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/nftables_blocker.pl
+ExecStart=/usr/local/bin/nftblocker
 ExecStop=/bin/kill -TERM $MAINPID
-ExecReload=/bin/kill -TERM $MAINPID && /usr/local/bin/nftables_blocker.pl
+ExecReload=/bin/kill -TERM $MAINPID && /usr/local/bin/nftblocker
 Restart=on-failure
 
 [Install]
