@@ -153,7 +153,7 @@ sub setup_logger {
     # Attempt to get the logger
     # $logger is a global variable.  Why return $logger when it is already global ... I don't know.
     $logger = get_logger() || croak "Unable to get logger";
-    $logger->info("Logger initialized");
+    $logger->info("Logger initialized") || croak "Unable to log message";
     return $logger;
 }
 
