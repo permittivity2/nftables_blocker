@@ -9,11 +9,13 @@ use Data::Dumper;
 use JSON qw(decode_json);
 
 $Data::Dumper::Indent = 1;
-$Data::Dumper::Sort = 1;
+$Data::Dumper::Sortkeys = 1;
 
 my $REGEX_IPV4 = q/\b((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\b/;
 
 # REGEX_IPV6 is not used and untested.  Provided here for future modules, add-ons, bolt-ons or for whomever to try.
+# If you add regex then you'll need to add a new element to the nft tables structure to store the IPv6 addresses.
+# For whatever reason, nftables has different elements for IPv4 and IPv6 addresses.
 # my $REGEX_IPV6 = qr/(
 #     (?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}|
 #     (?:[A-Fa-f0-9]{1,4}:){1,7}:|
@@ -115,10 +117,10 @@ sub _read_files {
 
 sub extract_bad_ips {
     my ($self, $args) = @_;
-    # $log->info("Running extract_bad_ips in " . __PACKAGE__ . " ...");
-
     my $files = $args->{files} || {};
     my $regexes = $args->{regexes} || {};
+    my $ignore_regexes = $args->{ignore_regexes} || {};
+    my $never_block = $args->{never_block} || {};
     
     if (! keys %$files) {
         $log->info("No files specified.");
@@ -133,23 +135,90 @@ sub extract_bad_ips {
     my $file_contents_ref = $self->_read_files($args) || [];
     my @file_contents = @$file_contents_ref;
 
-    my $combined_regex = join '|', values %$regexes;  # Using pipe to match any of the regexes
+    # Match the lines that contain the regexes
+    my @matched_lines = $self->_match_lines( { file_contents => \@file_contents, regexes => $regexes } );
 
-    # Hash to store unique bad IPs
-    my %bad_ips;
+    # Remove the lines that match the ignore regexes
+    @matched_lines = $self->_ignore_lines( { matched_lines => \@matched_lines, ignore_regexes => $ignore_regexes } );
 
-    # Get the bad ips, keep lines that match the combined regex, extract the IP addresses in each line, and remove duplicates
-    for my $line (@file_contents) {
-        if ($line =~ /$combined_regex/) {
-            while ($line =~ /$REGEX_IPV4/g) {
-                $bad_ips{$&} = 1;
+    # Extract all the IPs from each @matched_lines and store them in %bad_ips
+    #   This is some perl kung-fu.  It's a map within a grep within a map within a grep.
+    my $bad_ips = { map { $_ => 1 } grep { /$REGEX_IPV4/ } map { /$REGEX_IPV4/g } @matched_lines };
+    $log->debug("All possible bad IPs: " . join(", ", keys %$bad_ips));
+
+    # Remove the IPs that should never be blocked
+    $bad_ips = $self->_remove_never_block_ips( { bad_ips => $bad_ips, never_block => $never_block } );
+
+    my @unique_bad_ips = keys %$bad_ips;
+    $log->debug("Unique bad IPs: " . Dumper(\@unique_bad_ips));
+    return \@unique_bad_ips;
+}
+
+sub _remove_never_block_ips {
+    my $self = shift;
+    my $args = shift;
+    my $bad_ips = $args->{bad_ips};
+    my $never_block = $args->{never_block};
+    my @unique_bad_ips;
+
+    foreach my $bad_ip (keys %$bad_ips) {
+        $log->trace("Checking bad IP: $bad_ip against never block IPs.");
+        my $never_block_ip_found = 0;
+        foreach my $never_block_ip (keys %$never_block) {
+            if ($bad_ip =~ /$never_block_ip/) {
+                $log->debug("Removing never block IP: $never_block_ip from the list.");
+                $never_block_ip_found = 1;
+                last;
+            }
+        }
+        push @unique_bad_ips, $bad_ip unless $never_block_ip_found;
+    }
+
+    return \@unique_bad_ips;
+}
+
+sub _ignore_lines {
+    my $self = shift;
+    my $args = shift;
+    my $matched_lines = $args->{matched_lines};
+    my $ignore_regexes = $args->{ignore_regexes};
+    my @filtered_lines;
+
+    for my $line (@$matched_lines) {
+        my $ignore = 0;
+        foreach my $ignore_regex (keys %$ignore_regexes) {
+            $log->trace("Checking line: $line against ignore regex: $ignore_regex");
+            if ($line =~ /$ignore_regex/) {
+                $log->debug("Ignoring line: $line against ignore regex: $ignore_regex");
+                $ignore = 1;
+                last;
+            }
+        }
+        next if $ignore;
+        push @filtered_lines, $line;
+    }
+
+    return \@filtered_lines;
+}
+
+sub _matched_lines {
+    my $self = shift;
+    my $args = shift;
+    my $file_contents = $args->{file_contents};
+    my $regexes = $args->{regexes};
+    my @matched_lines;
+
+    for my $line (@$file_contents) {
+        foreach my $regex (keys %$regexes) {
+            $log->trace("Checking line: $line against regex: $regex");
+            if ($line =~ /$regex/) {
+                $log->debug("Matched line: $line against regex: $regex");
+                push @matched_lines, $line;
             }
         }
     }
-    my @unique_bad_ips = keys %bad_ips;
 
-    # $log->info("Unique bad IPs: " . Dumper(\@unique_bad_ips));
-    return \@unique_bad_ips;
+    return \@matched_lines;
 }
 
 sub _ip_in_nftables {

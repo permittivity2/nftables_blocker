@@ -554,7 +554,9 @@ sub process_log_file {
         my $bad_ips = $review_log_module->run();
         my $end_time = time;
         $log->debug("Time to process log file: " . ($end_time - $start_time) . " seconds");
-        $log->info("Completed cycle $cycle_count");
+        $log->debug("Completed cycle $cycle_count");
+        # write a cycle count entry evert 10 cycles
+        $log->info("Completed cycle $cycle_count (every 10 cycles for info)") if $cycle_count % 10 == 0;
 
         last if $exit_flag;  # Early exit flag check.  No need to add IPs to the queue if we are exiting.
 
