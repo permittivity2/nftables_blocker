@@ -413,7 +413,7 @@ sub _create_nftables_chain {
         or $log->error("Could not create nftables chain $chain.  Full command: $cmd")
         and return 0;
 
-    $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout $timeout \\; }";
+    $cmd = "nft add set $family $table $element { type ipv4_addr \\; flags timeout \\; timeout $timeout \\; flags interval\; }";
     $log->info("Running command to create nft timeout element: $cmd");
     system($cmd) == 0 and $log->info("Created nftables set $element")
         or $log->error("Could not create nftables set $element.  Full command: $cmd")

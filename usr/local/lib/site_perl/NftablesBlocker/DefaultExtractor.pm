@@ -14,7 +14,8 @@ $Data::Dumper::Sortkeys = 1;
 my $REGEX_IPV4 = q/\b((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\b/;
 
 # REGEX_IPV6 is not used and untested.  Provided here for future modules, add-ons, bolt-ons or for whomever to try.
-# If you add regex then you'll need to add a new element to the nft tables structure to store the IPv6 addresses.
+# If you add IPv6 regex then you'll need to add a new element to the nft tables structure to store the IPv6 addresses.
+# That also means new rules added as well to the chain to handle the new element.
 # For whatever reason, nftables has different elements for IPv4 and IPv6 addresses.
 # my $REGEX_IPV6 = qr/(
 #     (?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}|
@@ -53,9 +54,9 @@ sub run {
     my $cleaned_bad_ips;
     my $table = $self->{args}->{nftables_setup}->{table};
     my $element = $self->{args}->{nftables_setup}->{element};
-    my $nftables_element_set = _get_nftables_to_json( { table => $table, element => $element } );
+    my $nftables_element_set = $self->_get_nftables_to_json( { table => $table, element => $element } );
     foreach my $bad_ip (@$bad_ips) {
-        if ( _ip_in_nftables( { table => $table, element => $element, ip => $bad_ip, nftables_set => $nftables_element_set } ) ) {
+        if ( $self->_ip_in_nftables( { table => $table, element => $element, ip => $bad_ip, nftables_set => $nftables_element_set } ) ) {
             # $log->info("IP $bad_ip already in $table/$element.  Skipping.");
             next;
         }
@@ -121,6 +122,7 @@ sub extract_bad_ips {
     my $regexes = $args->{regexes} || {};
     my $ignore_regexes = $args->{ignore_regexes} || {};
     my $never_block = $args->{never_block} || {};
+    my $always_block = $args->{always_block} || {};
     
     if (! keys %$files) {
         $log->info("No files specified.");
@@ -149,9 +151,38 @@ sub extract_bad_ips {
     # Remove the IPs that should never be blocked
     $bad_ips = $self->_remove_never_block_ips( { bad_ips => $bad_ips, never_block => $never_block } );
 
+    # Add in the always block IPs
+    $bad_ips = $self->_add_always_block_ips( { bad_ips => $bad_ips, always_block => $always_block } );
+
     my @unique_bad_ips = keys %$bad_ips;
     $log->debug("Unique bad IPs: " . Dumper(\@unique_bad_ips));
     return \@unique_bad_ips;
+}
+
+sub _add_always_block_ips {
+    my ($self, $args) = @_;
+    my $bad_ips = $args->{bad_ips};
+    my $always_block = $args->{always_block};
+    my %unique_bad_ips = %$bad_ips;
+
+    foreach my $always_block_ip (keys %$always_block) {
+        $log->debug("Adding always block IP: $always_block_ip to the list.");
+        if ( $self->_is_ipv4($always_block_ip) ) {
+            $unique_bad_ips{$always_block_ip} = 1;
+        } else {
+            $log->warn("Always block IP: $always_block_ip is not a valid IPv4 address.");
+        }
+    }
+
+    return \%unique_bad_ips;
+}
+
+# Description: a sub to veriify ifa string is an IPv4 address that may also contain a valid subnet
+# Input: a string
+# Output: a boolean
+sub _is_ipv4 {
+    my ($self, $ip) = @_;
+    return $ip =~ /^$REGEX_IPV4(?:\/\d{1,2})?$/;
 }
 
 sub _remove_never_block_ips {
@@ -178,8 +209,7 @@ sub _remove_never_block_ips {
 }
 
 sub _ignore_lines {
-    my $self = shift;
-    my $args = shift;
+    my ($self, $args) = @_;
     my $matched_lines = $args->{matched_lines};
     my $ignore_regexes = $args->{ignore_regexes};
     my @filtered_lines;
@@ -202,8 +232,7 @@ sub _ignore_lines {
 }
 
 sub _matched_lines {
-    my $self = shift;
-    my $args = shift;
+    my ($self, $args) = @_;
     my $file_contents = $args->{file_contents};
     my $regexes = $args->{regexes};
     my @matched_lines;
@@ -222,7 +251,7 @@ sub _matched_lines {
 }
 
 sub _ip_in_nftables {
-    my $args = shift;
+    my ($self, $args) = @_;
     my $table = $args->{table};
     my $element = $args->{element};
     my $ip = $args->{ip};
@@ -249,7 +278,7 @@ sub _ip_in_nftables {
 }  ## end sub _ip_in_nftables
 
 sub _get_nftables_to_json {
-    my $args = shift;
+    my ($self, $args) = @_;
     my $table = $args->{table};
     my $element = $args->{element};
 
